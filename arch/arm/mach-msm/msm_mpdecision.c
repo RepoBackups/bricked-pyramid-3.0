@@ -1,26 +1,3 @@
-/*
- * arch/arm/mach-msm/msm_mpdecision.c
- *
- * cpu auto-hotplug/unplug based on system load for MSM dualcore cpus
- * single core while screen is off
- *
- * Copyright (c) 2012, Dennis Rassmann <showp1984@gmail.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
- */
-
 #include <linux/earlysuspend.h>
 #include <linux/init.h>
 #include <linux/cpufreq.h>
@@ -32,11 +9,7 @@
 #include <linux/hrtimer.h>
 #include <linux/delay.h>
 
-#define MPDEC_TAG                       "[MPDEC]: "
-#define MSM_MPDEC_STARTDELAY            70000
-#define MSM_MPDEC_DELAY                 500
-#define MSM_MPDEC_PAUSE                 10000
-#define MSM_MPDEC_IDLE_FREQ             486000
+#define MPDEC_TAG                       "[AnthraX-MPD]: "
 
 enum {
 	MSM_MPDEC_DISABLED = 0,
@@ -63,11 +36,11 @@ static struct msm_mpdec_tuners {
 	bool scroff_single_core;
 	unsigned long int idle_freq;
 } msm_mpdec_tuners_ins = {
-	.startdelay = MSM_MPDEC_STARTDELAY,
-	.delay = MSM_MPDEC_DELAY,
-	.pause = MSM_MPDEC_PAUSE,
+	.startdelay = CONFIG_MSM_MPDEC_STARTDELAY,
+	.delay = CONFIG_MSM_MPDEC_DELAY,
+	.pause = CONFIG_MSM_MPDEC_PAUSE,
 	.scroff_single_core = true,
-	.idle_freq = MSM_MPDEC_IDLE_FREQ,
+	.idle_freq = CONFIG_MSM_MPDEC_IDLE_FREQ,
 };
 
 static unsigned int NwNs_Threshold[4] = {35, 0, 0, 5};
@@ -153,7 +126,6 @@ static void msm_mpdec_work_thread(struct work_struct *work)
 	if (!mutex_trylock(&msm_cpu_lock))
 		goto out;
 
-	/* if sth messed with the cpus, update the check vars so we can proceed */
 	if (was_paused) {
 		for_each_possible_cpu(cpu) {
 			if (cpu_online(cpu))
@@ -238,9 +210,7 @@ static void msm_mpdec_late_resume(struct early_suspend *h)
 	for_each_possible_cpu(cpu) {
 		mutex_lock(&per_cpu(msm_mpdec_cpudata, cpu).suspend_mutex);
 		if ((cpu >= (CONFIG_NR_CPUS - 1)) && (num_online_cpus() < CONFIG_NR_CPUS)) {
-			/* Always enable cpus when screen comes online.
-			 * This boosts the wakeup process.
-			 */
+			/* Enable cpus when screen comes online. */
 			cpu_up(cpu);
 			per_cpu(msm_mpdec_cpudata, cpu).on_time = ktime_to_ms(ktime_get());
 			per_cpu(msm_mpdec_cpudata, cpu).online = true;
@@ -431,17 +401,17 @@ static ssize_t store_enabled(struct kobject *a, struct attribute *b,
 			per_cpu(msm_mpdec_cpudata, cpu).on_time = ktime_to_ms(ktime_get());
 			per_cpu(msm_mpdec_cpudata, cpu).online = true;
 			cpu_up(cpu);
-			pr_info(MPDEC_TAG"nap time... Hot plugged CPU[%d] | Mask=[%d%d]\n",
+			pr_info(MPDEC_TAG"disabled... Hot plugged CPU[%d] | Mask=[%d%d]\n",
 					 cpu, cpu_online(0), cpu_online(1));
 		} else {
-			pr_info(MPDEC_TAG"nap time...\n");
+			pr_info(MPDEC_TAG"disabled...\n");
 		}
 		break;
 	case '1':
 		state = MSM_MPDEC_IDLE;
 		was_paused = true;
 		schedule_delayed_work(&msm_mpdec_work, 0);
-		pr_info(MPDEC_TAG"firing up mpdecision...\n");
+		pr_info(MPDEC_TAG" mpdecision enabled...\n");
 		break;
 	default:
 		ret = -EINVAL;
@@ -569,4 +539,6 @@ static int __init msm_mpdec(void)
 }
 
 late_initcall(msm_mpdec);
+
+MODULE_DESCRIPTION("Kernel based MPDECISION");
 
